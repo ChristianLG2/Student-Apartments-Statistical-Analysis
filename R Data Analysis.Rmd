@@ -1,0 +1,238 @@
+---
+title: "R Statistic Analysis and Visualization"
+output: 
+  html_document:
+    theme: cerulean
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+**Sprint 1: Data Wrangling & Analysis With R and markdown**
+
+```{r, message=FALSE, warning=FALSE}
+
+library(mosaic)
+library(pander)
+library(tidyverse)
+library(DT) 
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+
+Rent <- read_csv("C:\\Users\\chris\\OneDrive\\Documents\\Github Posted\\Applied_Programming\\R Statistic Analysis and Visualization\\Rent.csv")
+
+View(Rent)
+
+Rent <- Rent %>% mutate(TotalPrice = (Rent$Price + Rent$Deposit + Rent$UtilityDeposit))
+
+
+```
+
+<br />
+
+## Background
+
+The dataset contains information on 122 apartments available for rent to students in Rexburg, Idaho. It covers various aspects such as apartment names, gender accommodation, addresses, contact information, pricing, capacity, parking availability, deposit requirements, utility deposits, floor plans, website links, geographical coordinates, distance to campus, walking minutes to campus, and descriptions.
+
+#### Key Insights
+__Apartment Characteristics:__
+
+The dataset includes character-based descriptions for the apartment name, gender accommodation, address, phone number, and website, providing essential contact and identification information.
+Descriptions and floor plans offer qualitative insights into each listing, with 1 to 36 floor plans available, indicating a wide range of apartment layouts.
+Pricing Details:
+
+Rent prices range from $850 to 1,585, with a median rent of 1,120US Dollars. This range indicates a variety of options, from more affordable to premium offerings.
+Private room prices are similarly ranged, from $850 to 1,669 US Dollars, suggesting options for different budgets and preferences.
+Deposits are generally low, with a maximum of $200, making initial costs more accessible for students.
+Utility deposits are even lower, with a majority at $0, indicating minimal additional upfront costs.
+Capacity and Amenities:
+
+Apartments have a wide capacity range, accommodating from 5 to 636 individuals, which likely includes both small and large apartment complexes.
+Parking availability varies significantly, with some locations offering up to 508 stalls, catering to students with vehicles.
+Location and Accessibility:
+
+The latitude and longitude coordinates indicate a concentrated geographical area within Rexburg, ideal for mapping and spatial analysis.
+Proximity to campus is a key feature, with distances ranging from as close as 0.06214 miles to 0.74565 miles, translating to walking minutes between 1 and 16 minutes. This information is crucial for students prioritizing campus accessibility.
+
+
+Here is a Table containing the characteristics of our Data:
+<br />
+<br />
+
+```{r, message=FALSE, warning=FALSE}
+# Code to get you started. 
+# View(...) works great in the Console, but datatable(...) must be
+# used instead within an R-chunk.
+datatable(Rent, options=list(lengthMenu = c(10,10,30)), extensions="Responsive")
+
+
+```
+
+<br />
+
+And a Summary table of our Data:
+
+<br />
+<br />
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+pander(summary(Rent))
+```
+<br />
+<br />
+
+## Analysis
+
+<!-- Present an interesting graphic using the Rent data set. Do not create the same graphics that are shown in the [Good Example Analysis](./Analyses/StudentHousing.html), but you can certainly use those graphics as a guide to inspire you on what to do yourself. -->
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+pal_gender <- colorFactor(c("pink", "blue"), domain = Rent$Gender)
+
+# Define color palette for Price
+pal_price <- colorNumeric("YlOrRd", domain = Rent$Price)
+
+# Determine a reasonable range for circle marker sizes
+max_price <- max(Rent$Price, na.rm = TRUE)
+min_price <- min(Rent$Price, na.rm = TRUE)
+
+# Create a leaflet map
+leaflet(data = Rent) %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addCircleMarkers(
+    ~Longitude, ~Latitude,  # Coordinates
+    radius = ~5 + (Price - min_price) / (max_price - min_price) * 15,  # Adjust radius scaling
+    color = ~pal_gender(Gender),  # Border color by Gender
+    fillColor = ~pal_price(Price),  # Fill color by Price
+    stroke = FALSE,  # No border
+    fillOpacity = 0.7,  # Transparency
+    popup = ~paste("Price: $", Price, "<br>Gender: ", Gender)  # Popup info
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal = pal_gender,
+    values = ~Gender,
+    title = "Apartment Gender",
+    opacity = 1
+  ) %>%
+  addLegend(
+    "topright",
+    pal = pal_price,
+    values = Rent$Price,
+    title = "Price Range",
+    labFormat = labelFormat(prefix = "$"),
+    opacity = 1
+  )
+  
+```
+
+After reviewing the general characteristics and pricing across our dataset, we noticed that rental prices might vary based on different factors, including the gender accommodation of the apartments. To explore this further, we decided to analyze how the median rental prices differ between apartments designated for males, females, and those that are co-ed or do not specify a gender preference. Understanding these differences can help us identify unique pricing strategies and demand within each segment.
+
+<br />
+<br />
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+# Use this R-chunk to...
+# ...Create an interesting graphic using the Rent data set.
+
+
+Rent$Price <- round(Rent$Price, 0)
+median_prices <- Rent %>%
+  group_by(Gender) %>%
+  summarize(median_price = median(Price))
+
+# Create the boxplot
+ggplot(Rent, aes(x = Gender, y = Price, fill = Gender)) + 
+  geom_boxplot() + 
+  geom_text(data = median_prices, aes(x = Gender, y = median_price, label = round(median_price, 2)), 
+            position = position_dodge(width = 0.75), vjust = -0.5) +
+  labs(
+    title = "Price Distribution by Gender",
+    x = "Gender",
+    y = "Price"
+  ) + 
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+```
+
+
+The relationship between WalkingMinutes and Price is not statistically significant, as indicated by the p-value of 0.375 for the WalkingMinutes coefficient. This means that we do not have enough evidence to conclude that there is a meaningful relationship between the distance from school and the price of the apartments in this dataset.
+The low R-squared value suggests that WalkingMinutes explains very little of the variation in Price.
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+sum(is.na(Rent$WalkingMinutes))
+sum(is.na(Rent$Price))
+
+# Remove rows with missing values from the entire dataset
+Rent <- na.omit(Rent)
+
+# Fit the linear model
+model <- lm(Price ~ WalkingMinutes, data = Rent)
+
+# Summarize the model
+summary(model)
+
+
+# Assuming 'Rent' data frame is already loaded and cleaned
+# Create the scatter plot with a regression line
+ggplot(data = Rent, aes(x = WalkingMinutes, y = Price, color = Gender)) +
+  geom_point() +  # Scatter plot with points colored by Gender
+  geom_smooth(method = "lm", se = FALSE, color = "black") +  # Regression line
+  labs(title = "Relationship between Walking Minutes and Apartment Price",
+       x = "Walking Minutes to School",
+       y = "Price of Apartment",
+       color = "Apartment Gender") +  # Label for the legend
+  theme_minimal()
+
+
+```
+
+
+<!-- Write a few statements here that explain your graphic and what it shows. -->
+
+In the 'Price Distribution by Gender' boxplot, we examine the distribution of rental prices for student housing in the Rexburg area, categorized by gender. This visualization highlights key trends and differences in the pricing of male and female student accommodations. While the overall cost range appears similar for both genders, a noteworthy observation is that the average (mean) rent for female housing tends to be higher than that for male housing. This suggests a gender-based variation in the pricing structure of student apartments in this region. 
+
+
+
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+# Use this R-chunk to...
+# ...compute and display a meaningful table of numerical summaries supporting your above graphic.
+summary_table <- Rent %>%
+  group_by(Gender) %>%
+  summarise(
+    Count = n(),
+    Mean = mean(Price, na.rm = TRUE),
+    Median = median(Price, na.rm = TRUE),
+    SD = sd(Price, na.rm = TRUE),
+    IQR = IQR(Price, na.rm = TRUE),
+    Min = min(Price, na.rm = TRUE),
+    Max = max(Price, na.rm = TRUE)
+  )
+
+
+pander(summary_table)
+```
+
+<!-- Write a few statements here that introduce your table of numerical summaries and what they show. -->
+
+Count: This column shows the number of rent entries available for each gender. It gives an idea of the dataset's size for male and female housing.
+
+Mean (Average) Price: This is the average rent price for each gender. According to your paragraph, we expect to see that the mean price for female housing is higher than that for male housing, which aligns with the observation that female apartments are more expensive on average.
+
+Median Price: The median gives the middle value of the rent prices when ordered from lowest to highest for each gender. This is less affected by outliers and extreme values than the mean and provides another perspective on the central tendency of the rent prices.
+
+Standard Deviation (SD): This measures the spread or variability of the rent prices around the mean. A higher standard deviation would indicate a wider range of prices within that gender category.
+
+Interquartile Range (IQR): This is the range between the first quartile (25th percentile) and the third quartile (75th percentile) and represents the middle 50% of the data. It's a measure of the dispersion similar to standard deviation but less influenced by outliers.
+
+Minimum (Min) and Maximum (Max) Prices: These values show the range of the rent prices, from the lowest to the highest, for each gender category.
+
+By examining these statistics, We can gain a comprehensive understanding of how rent prices are distributed and vary between male and female student housing in Rexburg. The table will quantitatively support the trends and observations noted in the boxplot and your descriptive paragraph
+
+
+## Conclusion
+
+In conclusion, the analysis of student housing rent prices in the Rexburg area, categorized by gender, reveals significant insights. The data, represented both in the boxplot and the summary table, indicates that while there is a general similarity in the range of rent prices between male and female housing, a notable difference lies in the average cost. The mean rent for female housing is consistently higher, suggesting a gender-based pricing disparity in the market. This difference is further underscored by the standard deviation and interquartile range, reflecting a wider variation in female housing prices.
